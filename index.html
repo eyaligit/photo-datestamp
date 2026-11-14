@@ -87,6 +87,7 @@
   input[type="file"] { display: none; }
   .folder-note { margin: 10px 0 0; }
   .folder-note.hidden { display: none; }
+  .drive-note { margin: 10px 0 0; line-height: 1.5; }
 
   /* Choice modal */
   .modal-backdrop {
@@ -265,6 +266,12 @@
   <button type="button" class="picker picker-alt" id="folderBtn">📁 בחירת תיקייה</button>
   <input id="folderInput" type="file" accept="image/*" multiple>
 
+  <button type="button" class="picker picker-alt" id="driveBtn">☁️ בחירה מ־Google Drive</button>
+  <p class="note info drive-note" id="driveNote">
+    <b>Google Photos</b> אינו נתמך ישירות (גוגל חסמו גישה של אפליקציות חיצוניות). צריך להעביר את התמונות ל־<span dir="ltr">Drive</span> או להוריד אותן קודם.<br>
+    כל עוד האפליקציה במצב בדיקות, רק חשבונות גוגל שאושרו יכולים להתחבר, וגוגל עלולים להציג מסך «אפליקציה לא מאומתת» — אפשר להמשיך דרך «מתקדם» ואז «המשך».
+  </p>
+
   <p class="hint">אפשר לבחור כמה תמונות יחד מגלריית התמונות, או לבחור תיקייה שלמה.</p>
   <p class="note warn folder-note hidden" id="folderNote">
     בטלפון לא ניתן להחליף את התמונות המקוריות — אפשר רק לשמור עותקים חדשים (דרך שיתוף או הורדה).
@@ -287,6 +294,7 @@
       <li>במחשב, ב«בחירת תיקייה» (כרום או אדג׳), אפשר להחליף את התמונות במקום או לשמור עותקים בתיקייה בשם&nbsp;<span dir="ltr">stamped</span>&rlm;. הפורמט נשאר כמו במקור, וגם פרטי הצילום המקוריים נשמרים.</li>
       <li>בשמירה דרך שיתוף או הורדה, פרטי הצילום המקוריים לא נשמרים בקובץ החדש — זה תקין.</li>
       <li>באייפון, תמונות בפורמט&nbsp;<span dir="ltr">HEIC</span> בדרך כלל מומרות אוטומטית בבחירה. אם תמונה לא נפתחת, אפשר לשמור אותה מחדש בפורמט&nbsp;<span dir="ltr">JPEG</span>&rlm;.</li>
+      <li>בבחירה מ־<span dir="ltr">Google Drive</span>&rlm;, הקבצים נשארים בחשבון הגוגל שלכם — אנחנו רק מורידים אותם, מעבדים אותם כאן בדפדפן, ומחזירים אותם לפי הבחירה (עותק / החלפה / הורדה). התמונות אינן נשלחות לשום שרת שלנו.</li>
     </ul>
   </footer>
 </div>
@@ -312,6 +320,30 @@
     </button>
 
     <button type="button" class="btn modal-cancel" id="choiceCancel">ביטול</button>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="driveModal" role="dialog" aria-modal="true" aria-labelledby="driveModalTitle">
+  <div class="modal">
+    <h2 id="driveModalTitle">איך לשמור את התמונות עם החותמת?</h2>
+    <p class="modal-folder" id="driveModalCount"></p>
+
+    <button type="button" class="btn primary modal-choice" id="driveCopy">
+      🗂️ לשמור עותק ב־<span dir="ltr">Drive</span>
+      <small>ייווצר קובץ חדש בשם <span dir="ltr">&lt;שם&gt;_stamped.jpg</span> באותה תיקייה שבה נמצא המקור. המקור נשאר כמו שהוא.</small>
+    </button>
+
+    <button type="button" class="btn danger modal-choice" id="driveReplace">
+      ⚠️ להחליף את המקור ב־<span dir="ltr">Drive</span>
+      <small>הקובץ המקורי יידרס ב־<span dir="ltr">Drive</span>. <span dir="ltr">Drive</span> שומר היסטוריית גרסאות לקבצים שאינם של גוגל, כך שאפשר לשחזר מ«ניהול גרסאות» אם טעו. קובץ <span dir="ltr">PNG</span> עשוי להישמר כ־<span dir="ltr">JPEG</span>.</small>
+    </button>
+
+    <button type="button" class="btn modal-choice" id="driveDownload">
+      ⬇️ להוריד למכשיר
+      <small>לא נכתוב כלום ל־<span dir="ltr">Drive</span> — התמונות יוחתמו ויישמרו אצלכם (שיתוף או הורדה), תמיד בפורמט <span dir="ltr">JPEG</span>.</small>
+    </button>
+
+    <button type="button" class="btn modal-cancel" id="driveCancel">ביטול</button>
   </div>
 </div>
 
@@ -1191,6 +1223,588 @@
   saveAllBtn.addEventListener("click", saveAll);
   clearAllBtn.addEventListener("click", clearAll);
 
+  // ---------- Google Drive support ----------
+  // Fully optional: the Google scripts are loaded lazily on the first click of
+  // the Drive button, so local file / folder use keeps working even if Google's
+  // servers are unreachable. Photos never go to OUR server; after the user signs
+  // in, Drive traffic goes only to Google APIs, and files are stamped in-browser.
+  const GOOGLE = {
+    PROJECT_NUMBER: "192311590203", // Cloud project number / Picker appId
+    CLIENT_ID: "192311590203-7a5l667vhu3t1m5ak24v1ru4902sb620.apps.googleusercontent.com",
+    API_KEY: "AIzaSyB2Gh3gNwhDaeCcpmuq03QIY1iCMqhelPs",
+    SCOPE: "https://www.googleapis.com/auth/drive.file", // drive.file ONLY
+  };
+
+  const FOLDER_PICK_MESSAGE =
+    "לא הצלחנו לקרוא את התמונות שבתיקייה (עם ההרשאה המצומצמת, לרוב אי אפשר לקרוא " +
+    "תוכן של תיקייה שנבחרה כולה). אפשר לפתוח את התיקייה בבוחר של Google ולבחור את " +
+    "התמונות עצמן — במחשב: Ctrl או Cmd עם קליק, או בחירת הכול; בטלפון: לחיצה ארוכה " +
+    "לבחירה מרובה.";
+
+  // ----- Pure, testable helpers -----
+
+  // Parse a Google Picker callback payload into { action, items }, where each
+  // item is { id, name, mimeType, isFolder, sizeBytes }. Works on the raw picker
+  // response object (string keys "action"/"docs") so it needs no live API.
+  function parsePickerDocs(data) {
+    const out = { action: null, items: [] };
+    if (!data) { out.action = "cancel"; return out; }
+    out.action = data.action || null;
+    const docs = data.docs || [];
+    for (const d of docs) {
+      const mimeType = d.mimeType || "";
+      const isFolder =
+        mimeType === "application/vnd.google-apps.folder" || d.type === "folder";
+      out.items.push({
+        id: d.id,
+        name: d.name || "",
+        mimeType: mimeType,
+        isFolder: isFolder,
+        sizeBytes: d.sizeBytes,
+        parents: d.parentId ? [d.parentId]
+          : (Array.isArray(d.parents) ? d.parents : undefined),
+      });
+    }
+    return out;
+  }
+
+  // The Drive query that lists image children of a folder (non-trashed).
+  function buildFolderListQuery(folderId) {
+    return "'" + folderId + "' in parents and mimeType contains 'image/' and trashed=false";
+  }
+
+  function buildFolderListUrl(folderId, pageToken) {
+    const params = new URLSearchParams();
+    params.set("q", buildFolderListQuery(folderId));
+    params.set("fields",
+      "files(id,name,mimeType,parents,createdTime,imageMediaMetadata),nextPageToken");
+    params.set("pageSize", "200");
+    if (pageToken) params.set("pageToken", pageToken);
+    return "https://www.googleapis.com/drive/v3/files?" + params.toString();
+  }
+
+  // Decide the stamp date from EXIF first, then Drive metadata, then createdTime.
+  // Returns { dt, source, fromExif }; dt is null when nothing was found (caller
+  // falls back to "now"). imageMediaMetadata.time is "YYYY:MM:DD HH:MM:SS".
+  function chooseDriveDate(exifDateStr, metadata) {
+    const exifDt = parseExifDate(exifDateStr);
+    if (exifDt) return { dt: exifDt, source: "exif", fromExif: true };
+    metadata = metadata || {};
+    const imm = metadata.imageMediaMetadata || {};
+    let dt = parseExifDate(imm.time) || parseExifDate(imm.date);
+    if (dt) return { dt: dt, source: "imageMediaMetadata", fromExif: false };
+    if (metadata.createdTime) {
+      const c = new Date(metadata.createdTime);
+      if (!isNaN(c.getTime())) return { dt: c, source: "createdTime", fromExif: false };
+    }
+    return { dt: null, source: "now", fromExif: false };
+  }
+
+  let boundaryCounter = 0;
+  function makeBoundary() {
+    boundaryCounter++;
+    return "stampdateboundary" + Date.now().toString(36) + "x" + boundaryCounter;
+  }
+
+  // Build a multipart/related upload body (metadata JSON + raw image bytes).
+  // Returns { body: Uint8Array, contentType }.
+  function buildMultipartBody(metadata, bytes, mimeType, boundary) {
+    const enc = new TextEncoder();
+    const head = enc.encode(
+      "--" + boundary + "\r\n" +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      JSON.stringify(metadata) + "\r\n" +
+      "--" + boundary + "\r\n" +
+      "Content-Type: " + (mimeType || "application/octet-stream") + "\r\n\r\n"
+    );
+    const tail = enc.encode("\r\n--" + boundary + "--");
+    const body = new Uint8Array(head.length + bytes.length + tail.length);
+    body.set(head, 0);
+    body.set(bytes, head.length);
+    body.set(tail, head.length + bytes.length);
+    return { body: body, contentType: "multipart/related; boundary=" + boundary };
+  }
+
+  // ----- Drive REST helpers (all go through a pluggable fetch for testing) -----
+  async function driveFetch(fetchImpl, token, url, options) {
+    options = options || {};
+    const headers = Object.assign({}, options.headers || {});
+    if (token) headers["Authorization"] = "Bearer " + token;
+    const resp = await fetchImpl(url, Object.assign({}, options, { headers: headers }));
+    if (resp && resp.status === 401) {
+      const e = new Error("drive 401"); e.authError = true; throw e;
+    }
+    if (!resp || !resp.ok) {
+      const e = new Error("drive http " + (resp ? resp.status : "no-response"));
+      e.status = resp ? resp.status : 0;
+      throw e;
+    }
+    return resp;
+  }
+
+  async function driveDownload(fetchImpl, token, id) {
+    const url = "https://www.googleapis.com/drive/v3/files/" +
+      encodeURIComponent(id) + "?alt=media";
+    const resp = await driveFetch(fetchImpl, token, url);
+    return await resp.arrayBuffer();
+  }
+
+  async function driveMetadata(fetchImpl, token, id) {
+    const url = "https://www.googleapis.com/drive/v3/files/" +
+      encodeURIComponent(id) +
+      "?fields=id,name,mimeType,parents,createdTime,imageMediaMetadata,size";
+    const resp = await driveFetch(fetchImpl, token, url);
+    return await resp.json();
+  }
+
+  async function listFolderImages(fetchImpl, token, folderId, maxFiles) {
+    const files = [];
+    let pageToken = null, truncated = false;
+    do {
+      const url = buildFolderListUrl(folderId, pageToken);
+      const resp = await driveFetch(fetchImpl, token, url);
+      const data = await resp.json();
+      const batch = data.files || [];
+      for (const f of batch) {
+        if (files.length >= maxFiles) { truncated = true; break; }
+        files.push(f);
+      }
+      if (files.length >= maxFiles) {
+        if (data.nextPageToken) truncated = true;
+        break;
+      }
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
+    return { files: files, truncated: truncated };
+  }
+
+  async function driveUploadCopy(fetchImpl, token, name, blob, parents) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const metadata = { name: name };
+    if (parents && parents.length) metadata.parents = parents;
+    const boundary = makeBoundary();
+    const built = buildMultipartBody(metadata, bytes, blob.type || "image/jpeg", boundary);
+    const url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+    const resp = await driveFetch(fetchImpl, token, url, {
+      method: "POST",
+      headers: { "Content-Type": built.contentType },
+      body: built.body,
+    });
+    try { return await resp.json(); } catch (e) { return {}; }
+  }
+
+  async function driveReplace(fetchImpl, token, id, blob) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const url = "https://www.googleapis.com/upload/drive/v3/files/" +
+      encodeURIComponent(id) + "?uploadType=media";
+    const resp = await driveFetch(fetchImpl, token, url, {
+      method: "PATCH",
+      headers: { "Content-Type": blob.type || "image/jpeg" },
+      body: bytes,
+    });
+    try { return await resp.json(); } catch (e) { return { id: id }; }
+  }
+
+  // Download + stamp a single Drive image, then (per mode) upload a copy,
+  // replace the original, or just return the stamped blob for download.
+  async function processOneDriveFile(f, mode, fetchImpl, token) {
+    const buffer = await driveDownload(fetchImpl, token, f.id);
+    const exif = parseExif(buffer);
+    const exifDt = parseExifDate(exif.dateStr);
+
+    // Fetch metadata when we still need a date fallback, or when copying and
+    // the picked item has no parent (Picker often omits parents).
+    let meta = f;
+    const needMeta = (!exifDt && !f.imageMediaMetadata && !f.createdTime) ||
+      (mode === "copy" && !(f.parents && f.parents.length));
+    if (needMeta) {
+      try { meta = await driveMetadata(fetchImpl, token, f.id); }
+      catch (e) { if (e && e.authError) throw e; meta = f; }
+    }
+    const chosen = chooseDriveDate(exif.dateStr, meta);
+
+    const name = f.name || meta.name || "image";
+    const type = f.mimeType || meta.mimeType || "";
+    const parents = (f.parents && f.parents.length)
+      ? f.parents
+      : (meta.parents && meta.parents.length ? meta.parents : undefined);
+    const lastModified = (!chosen.fromExif && chosen.dt) ? chosen.dt.getTime() : 0;
+
+    // Output policy mirrors folder mode: copy -> JPEG "<base>_stamped.jpg";
+    // replace -> keep original format with EXIF re-inserted; download -> JPEG.
+    let outputFormat, preserveExif;
+    if (mode === "copy") { outputFormat = "jpeg"; preserveExif = true; }
+    else if (mode === "replace") { outputFormat = "auto"; preserveExif = true; }
+    else { outputFormat = "jpeg"; preserveExif = false; }
+
+    const r = await stampImage(buffer, {
+      name: name, type: type, lastModified: lastModified,
+      outputFormat: outputFormat, preserveExif: preserveExif,
+    });
+
+    const outName = (mode === "replace") ? name : stampedJpegName(name);
+    const result = {
+      id: f.id, name: name, outName: outName, blob: r.blob,
+      dateText: r.dateText, fromFileDate: r.fromFileDate, wasPng: r.wasPng,
+      outputFormat: r.outputFormat, dateSource: chosen.source, mode: mode,
+      uploadedId: null, replacedId: null, error: null,
+    };
+
+    if (mode === "copy") {
+      const parentIds = (parents && parents.length) ? [parents[0]] : undefined;
+      const up = await driveUploadCopy(fetchImpl, token, outName, r.blob, parentIds);
+      result.uploadedId = up && up.id ? up.id : true;
+    } else if (mode === "replace") {
+      await driveReplace(fetchImpl, token, f.id, r.blob);
+      result.replacedId = f.id;
+    }
+    return result;
+  }
+
+  // Run the full Drive stamp pipeline over picked items. Folders are expanded
+  // via files.list (gracefully degraded when drive.file cannot read them). Pure
+  // of UI: a test can drive it with a fake fetch and token. Options:
+  //   fetchImpl, token, maxFolderFiles, onProgress(done,total), onResult(one,i,total).
+  async function processDriveItems(items, mode, opts) {
+    opts = opts || {};
+    const fetchImpl = opts.fetchImpl ||
+      (typeof window !== "undefined" && window.fetch ? window.fetch.bind(window) : null);
+    const token = opts.token;
+    const maxFolderFiles = opts.maxFolderFiles || 200;
+
+    const summary = {
+      copied: 0, replaced: 0, downloaded: 0, failed: 0,
+      failNames: [], folderIssues: [], truncated: false, folderMessage: null,
+    };
+    const results = [];
+
+    // 1) Expand folders into individual image items.
+    const fileItems = [];
+    for (const it of (items || [])) {
+      if (it.isFolder) {
+        let listed = null;
+        try {
+          listed = await listFolderImages(fetchImpl, token, it.id, maxFolderFiles);
+        } catch (e) {
+          if (e && e.authError) throw e;
+          summary.folderIssues.push(it.name || it.id);
+          continue;
+        }
+        if (!listed || !listed.files.length) {
+          summary.folderIssues.push(it.name || it.id);
+          continue;
+        }
+        if (listed.truncated) summary.truncated = true;
+        for (const f of listed.files) fileItems.push(f);
+      } else {
+        fileItems.push(it);
+      }
+    }
+    if (summary.folderIssues.length) summary.folderMessage = FOLDER_PICK_MESSAGE;
+
+    // 2) Process each image sequentially so large batches don't freeze the page.
+    const total = fileItems.length;
+    for (let i = 0; i < total; i++) {
+      const f = fileItems[i];
+      if (opts.onProgress) opts.onProgress(i, total);
+      let one;
+      try {
+        one = await processOneDriveFile(f, mode, fetchImpl, token);
+        if (mode === "copy") summary.copied++;
+        else if (mode === "replace") summary.replaced++;
+        else summary.downloaded++;
+      } catch (e) {
+        if (e && e.authError) throw e; // bubble up 401 so the UI can re-auth
+        summary.failed++;
+        summary.failNames.push(f.name || f.id);
+        one = { id: f.id, name: f.name || f.id, outName: f.name || f.id,
+                blob: null, error: String(e && e.message ? e.message : e) };
+      }
+      results.push(one);
+      if (opts.onResult) opts.onResult(one, i, total);
+    }
+
+    return { results: results, summary: summary };
+  }
+
+  // ----- Lazy loaders for the official Google scripts -----
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.async = true; s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  function gisAvailable() {
+    return !!(window.__gis ||
+      (window.google && window.google.accounts && window.google.accounts.oauth2));
+  }
+  function pickerAvailable() {
+    return !!(window.google && window.google.picker);
+  }
+
+  async function loadGoogleScripts() {
+    if (!gisAvailable()) {
+      await loadScript("https://accounts.google.com/gsi/client");
+    }
+    if (!pickerAvailable()) {
+      if (!window.gapi) await loadScript("https://apis.google.com/js/api.js");
+      await new Promise((resolve, reject) => {
+        window.gapi.load("picker", {
+          callback: resolve,
+          onerror: () => reject(new Error("picker load failed")),
+        });
+      });
+    }
+  }
+
+  // ----- OAuth token (Google Identity Services) -----
+  let tokenClient = null;
+  let tokenInfo = { accessToken: null, expiresAt: 0 };
+  let pendingToken = null;
+
+  function initTokenClientOnce() {
+    if (tokenClient) return;
+    const oauth2 = window.__gis ||
+      (window.google && window.google.accounts && window.google.accounts.oauth2);
+    tokenClient = oauth2.initTokenClient({
+      client_id: GOOGLE.CLIENT_ID,
+      scope: GOOGLE.SCOPE,
+      callback: (resp) => {
+        if (!pendingToken) return;
+        const p = pendingToken; pendingToken = null;
+        if (resp && resp.error) { p.reject(new Error(resp.error)); return; }
+        tokenInfo.accessToken = resp.access_token;
+        tokenInfo.expiresAt = Date.now() + ((resp.expires_in || 3600) * 1000);
+        p.resolve(tokenInfo.accessToken);
+      },
+      error_callback: (err) => {
+        if (!pendingToken) return;
+        const p = pendingToken; pendingToken = null;
+        const e = new Error((err && err.type) || "token_error");
+        e.cancelled = true;
+        p.reject(e);
+      },
+    });
+  }
+
+  // Reuse a live token unless it is close to expiry; otherwise prompt.
+  function getAccessToken(forceConsent) {
+    const now = Date.now();
+    if (!forceConsent && tokenInfo.accessToken && tokenInfo.expiresAt - now > 60000) {
+      return Promise.resolve(tokenInfo.accessToken);
+    }
+    initTokenClientOnce();
+    return new Promise((resolve, reject) => {
+      pendingToken = { resolve: resolve, reject: reject };
+      try {
+        tokenClient.requestAccessToken({
+          prompt: (forceConsent || !tokenInfo.accessToken) ? "consent" : "",
+        });
+      } catch (e) { pendingToken = null; reject(e); }
+    });
+  }
+
+  // ----- Picker -----
+  function openPicker(accessToken) {
+    return new Promise((resolve) => {
+      const g = window.google;
+      const view = new g.picker.DocsView(g.picker.ViewId.DOCS_IMAGES);
+      if (view.setIncludeFolders) view.setIncludeFolders(true);
+      if (view.setSelectFolderEnabled) view.setSelectFolderEnabled(true);
+      if (view.setMimeTypes) view.setMimeTypes("image/jpeg,image/png,image/jpg,image/webp,application/vnd.google-apps.folder");
+      const picker = new g.picker.PickerBuilder()
+        .setAppId(GOOGLE.PROJECT_NUMBER)
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(GOOGLE.API_KEY)
+        .addView(view)
+        .enableFeature(g.picker.Feature.MULTISELECT_ENABLED)
+        .setTitle("בחרו תמונות מ־Google Drive")
+        .setCallback((data) => {
+          const action = data && data[g.picker.Response.ACTION];
+          if (action === g.picker.Action.PICKED) {
+            resolve(parsePickerDocs(data));
+          } else if (action === g.picker.Action.CANCEL) {
+            resolve({ action: "cancel", items: [] });
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    });
+  }
+
+  // ----- Drive UI wiring -----
+  const driveBtn = document.getElementById("driveBtn");
+  const driveModal = document.getElementById("driveModal");
+  const driveModalCount = document.getElementById("driveModalCount");
+  const driveCopyBtn = document.getElementById("driveCopy");
+  const driveReplaceBtn = document.getElementById("driveReplace");
+  const driveDownloadBtn = document.getElementById("driveDownload");
+  const driveCancelBtn = document.getElementById("driveCancel");
+
+  // Choose copy / replace / download. Resolves to a mode string or null.
+  function askDriveChoice(count) {
+    return new Promise((resolve) => {
+      driveModalCount.textContent = "נבחרו " + count + " פריטים מ־Google Drive.";
+      driveModal.classList.remove("hidden");
+
+      function cleanup(result) {
+        driveModal.classList.add("hidden");
+        driveCopyBtn.removeEventListener("click", onCopy);
+        driveReplaceBtn.removeEventListener("click", onReplace);
+        driveDownloadBtn.removeEventListener("click", onDownload);
+        driveCancelBtn.removeEventListener("click", onCancel);
+        driveModal.removeEventListener("click", onBackdrop);
+        resolve(result);
+      }
+      function onCopy() { cleanup("copy"); }
+      function onReplace() {
+        const ok = window.confirm(
+          "להחליף את הקבצים המקוריים ב־Google Drive? Drive שומר היסטוריית גרסאות " +
+          "לקבצים שאינם של גוגל, כך שאפשר לשחזר מ«ניהול גרסאות» אם טעו.");
+        if (ok) cleanup("replace");
+      }
+      function onDownload() { cleanup("download"); }
+      function onCancel() { cleanup(null); }
+      function onBackdrop(e) { if (e.target === driveModal) cleanup(null); }
+
+      driveCopyBtn.addEventListener("click", onCopy);
+      driveReplaceBtn.addEventListener("click", onReplace);
+      driveDownloadBtn.addEventListener("click", onDownload);
+      driveCancelBtn.addEventListener("click", onCancel);
+      driveModal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  async function runDrive(items, mode, token) {
+    clearAll();
+    window.__done = false;
+    if (mode === "download") {
+      toolbar.classList.remove("hidden");
+      saveAllBtn.disabled = true;
+    } else {
+      toolbar.classList.add("hidden");
+    }
+
+    const previewLimit = 12;
+    let rendered = 0;
+    const opts = {
+      token: token,
+      onProgress: (done, total) => {
+        setStatus('מעבד ' + (done + 1) + ' מתוך ' + total +
+                  ' <span class="spinner"></span>');
+      },
+      onResult: (one) => {
+        if (one.error) {
+          const res = {
+            name: one.name, outName: one.outName || one.name, blob: null,
+            url: null, error: new Error(one.error), folderMode: mode !== "download",
+          };
+          results.push(res);
+          if (rendered < previewLimit) { renderCard(res); rendered++; }
+          return;
+        }
+        const res = {
+          name: one.name, outName: one.outName, blob: one.blob,
+          url: (rendered < previewLimit) ? URL.createObjectURL(one.blob) : null,
+          dateText: one.dateText, fromFileDate: one.fromFileDate, wasPng: one.wasPng,
+          folderMode: mode !== "download", error: null,
+        };
+        results.push(res);
+        if (res.url) { renderCard(res); rendered++; }
+      },
+    };
+
+    let out;
+    try {
+      out = await processDriveItems(items, mode, opts);
+    } catch (e) {
+      if (e && e.authError) {
+        setStatus('ההרשאה פגה — יש להתחבר מחדש… <span class="spinner"></span>');
+        try {
+          const newToken = await getAccessToken(true);
+          return await runDrive(items, mode, newToken);
+        } catch (e2) {
+          setStatus("יש להתחבר מחדש ל־Google Drive ולנסות שוב.");
+          return;
+        }
+      }
+      setStatus("אירעה שגיאה בעיבוד הקבצים מ־Google Drive.");
+      return;
+    }
+
+    const s = out.summary;
+    const done = s.copied + s.replaced + s.downloaded;
+    let msg;
+    if (mode === "copy") {
+      msg = "סיימנו! נשמרו " + s.copied + " עותקים חדשים ב־Google Drive (בשם <bdi>_stamped.jpg</bdi>).";
+    } else if (mode === "replace") {
+      msg = "סיימנו! הוחלפו " + s.replaced + " קבצים ב־Google Drive.";
+    } else {
+      msg = "מוכן! " + s.downloaded + " תמונות עם חותמת תאריך. אפשר לשמור או לשתף.";
+    }
+    if (s.failed) {
+      msg += " " + s.failed + " נכשלו";
+      if (s.failNames.length && s.failNames.length <= 5) {
+        msg += " (" + s.failNames.join(", ") + ")";
+      }
+      msg += ".";
+    }
+    if (s.truncated) {
+      msg += " הוצגו עד 200 תמונות מכל תיקייה; ייתכן שיש עוד.";
+    }
+    if (rendered < done) {
+      msg += " מוצגות " + rendered + " תצוגות מקדימות ראשונות.";
+    }
+    if (s.folderMessage) {
+      msg += "<br><span class=\"note warn\" style=\"display:block;margin-top:8px\">" +
+             s.folderMessage + "</span>";
+    }
+    setStatus(msg);
+    if (mode === "download") {
+      saveAllBtn.disabled = results.filter((r) => r.blob).length === 0;
+    }
+    window.__done = true;
+  }
+
+  async function onDriveButton() {
+    setStatus('טוען את Google Drive… <span class="spinner"></span>');
+    try {
+      await loadGoogleScripts();
+    } catch (e) {
+      setStatus("לא הצלחנו לטעון את Google Drive. בדקו את החיבור לאינטרנט ונסו שוב.");
+      return;
+    }
+    let token;
+    try {
+      token = await getAccessToken(false);
+    } catch (e) {
+      if (e && e.cancelled) { setStatus(""); return; } // user closed consent
+      setStatus("ההתחברות ל־Google לא הושלמה. אפשר לנסות שוב.");
+      return;
+    }
+    setStatus("");
+    let picked;
+    try {
+      picked = await openPicker(token);
+    } catch (e) {
+      setStatus("לא הצלחנו לפתוח את בוחר הקבצים של Google.");
+      return;
+    }
+    if (!picked || picked.action !== "picked" || !picked.items.length) {
+      setStatus(""); // cancelled -> stay silent
+      return;
+    }
+    const mode = await askDriveChoice(picked.items.length);
+    if (!mode) return;
+    await runDrive(picked.items, mode, token);
+  }
+
+  driveBtn.addEventListener("click", onDriveButton);
+
   // ---------- Test hooks (no real directory picker needed) ----------
   window.__stampImage = stampImage;
   window.__reinsertExifApp1 = reinsertExifApp1;
@@ -1199,6 +1813,19 @@
   // Drives the folder write path against any FileSystemDirectoryHandle (a real
   // picked folder, or OPFS in tests) — no native directory picker required.
   window.__runFolder = runFolder;
+
+  // Drive hooks for mocked tests (no real OAuth / Picker needed). The pure
+  // helpers plus a full pipeline runner driven by an injected fetch + token.
+  window.__drive = {
+    parsePickerDocs: parsePickerDocs,
+    buildFolderListQuery: buildFolderListQuery,
+    buildFolderListUrl: buildFolderListUrl,
+    chooseDriveDate: chooseDriveDate,
+    buildMultipartBody: buildMultipartBody,
+    makeBoundary: makeBoundary,
+    stampedJpegName: stampedJpegName,
+  };
+  window.__processDriveItems = processDriveItems;
 
 })();
 </script>
