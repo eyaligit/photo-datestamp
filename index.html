@@ -76,7 +76,72 @@
     transition: background .15s;
   }
   .picker:active { background: var(--accent-dark); }
+  .picker-alt {
+    margin-top: 10px;
+    background: var(--card);
+    color: var(--accent);
+    border: 2px solid var(--accent);
+    box-shadow: none;
+  }
+  .picker-alt:active { background: #eff6ff; }
   input[type="file"] { display: none; }
+  .folder-note { margin: 10px 0 0; }
+  .folder-note.hidden { display: none; }
+
+  /* Choice modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(17,19,23,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 50;
+  }
+  .modal-backdrop.hidden { display: none; }
+  .modal {
+    background: var(--card);
+    border-radius: 18px;
+    max-width: 440px;
+    width: 100%;
+    padding: 20px 18px 18px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h2 { font-size: 1.2rem; margin: 0 0 6px; }
+  .modal .modal-folder { color: var(--muted); font-size: .9rem; margin: 0 0 14px; word-break: break-all; }
+  .modal .recursive {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    font-size: .95rem;
+    cursor: pointer;
+  }
+  .modal .recursive input { width: 20px; height: 20px; }
+  .modal-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: start;
+    gap: 4px;
+    width: 100%;
+    min-height: 56px;
+    margin-bottom: 12px;
+    padding: 14px;
+    font-size: 1.05rem;
+  }
+  .modal-choice small { font-weight: 400; font-size: .82rem; opacity: .95; }
+  .btn.danger {
+    background: #fff;
+    color: var(--err);
+    border: 2px solid var(--err);
+  }
+  .btn.danger small { color: var(--err); opacity: 1; }
+  .btn.danger:active { background: var(--err-bg); }
+  .modal-cancel { width: 100%; min-height: 48px; }
 
   .hint {
     text-align: center;
@@ -196,7 +261,14 @@
 
   <label class="picker" for="fileInput">📷 בחרו תמונות</label>
   <input id="fileInput" type="file" accept="image/*" multiple>
-  <p class="hint">אפשר לבחור כמה תמונות יחד מגלריית התמונות.</p>
+
+  <button type="button" class="picker picker-alt" id="folderBtn">📁 בחירת תיקייה</button>
+  <input id="folderInput" type="file" accept="image/*" multiple>
+
+  <p class="hint">אפשר לבחור כמה תמונות יחד מגלריית התמונות, או לבחור תיקייה שלמה.</p>
+  <p class="note warn folder-note hidden" id="folderNote">
+    בטלפון לא ניתן להחליף את התמונות המקוריות — אפשר רק לשמור עותקים חדשים (דרך שיתוף או הורדה).
+  </p>
 
   <div class="toolbar hidden" id="toolbar">
     <button class="btn primary" id="saveAll">💾 שמרו הכל</button>
@@ -211,11 +283,36 @@
     <div>כמה דברים טובים לדעת:</div>
     <ul>
       <li>התאריך נלקח מפרטי הצילום השמורים בתמונה. אם אין תאריך צילום — נשתמש בתאריך הקובץ ונסמן זאת.</li>
-      <li>הקובץ שנשמר הוא תמיד בפורמט&nbsp;<span dir="ltr">JPEG</span> ובאיכות גבוהה, גם כשהתמונה המקורית היא בפורמט&nbsp;<span dir="ltr">PNG</span>&rlm;.</li>
-      <li>בשמירה, פרטי הצילום המקוריים לא נשמרים בקובץ החדש — זה תקין.</li>
+      <li>בשמירה דרך שיתוף או הורדה, הקובץ נשמר תמיד בפורמט&nbsp;<span dir="ltr">JPEG</span> ובאיכות גבוהה, גם כשהתמונה המקורית היא בפורמט&nbsp;<span dir="ltr">PNG</span>&rlm;.</li>
+      <li>במחשב, ב«בחירת תיקייה» (כרום או אדג׳), אפשר להחליף את התמונות במקום או לשמור עותקים בתיקייה בשם&nbsp;<span dir="ltr">stamped</span>&rlm;. הפורמט נשאר כמו במקור, וגם פרטי הצילום המקוריים נשמרים.</li>
+      <li>בשמירה דרך שיתוף או הורדה, פרטי הצילום המקוריים לא נשמרים בקובץ החדש — זה תקין.</li>
       <li>באייפון, תמונות בפורמט&nbsp;<span dir="ltr">HEIC</span> בדרך כלל מומרות אוטומטית בבחירה. אם תמונה לא נפתחת, אפשר לשמור אותה מחדש בפורמט&nbsp;<span dir="ltr">JPEG</span>&rlm;.</li>
     </ul>
   </footer>
+</div>
+
+<div class="modal-backdrop hidden" id="folderModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h2 id="modalTitle">איך לשמור את התמונות עם החותמת?</h2>
+    <p class="modal-folder">תיקייה נבחרה: <b id="modalFolderName" dir="ltr"></b></p>
+
+    <label class="recursive">
+      <input type="checkbox" id="recursiveChk">
+      <span>כולל תיקיות משנה</span>
+    </label>
+
+    <button type="button" class="btn primary modal-choice" id="choiceCopy">
+      🗂️ לשמור עותק
+      <small>התמונות החדשות ייכתבו לתיקייה חדשה בשם <span dir="ltr">stamped</span>, עם אותם שמות קבצים. המקור נשאר כמו שהוא.</small>
+    </button>
+
+    <button type="button" class="btn danger modal-choice" id="choiceOverwrite">
+      ⚠️ להחליף את התמונות המקוריות
+      <small>הקבצים המקוריים יידרסו במקום. <b>פעולה זו אינה ניתנת לביטול!</b></small>
+    </button>
+
+    <button type="button" class="btn modal-cancel" id="choiceCancel">ביטול</button>
+  </div>
 </div>
 
 <script>
@@ -353,6 +450,94 @@
     return null;
   }
 
+  // ---------- EXIF APP1 preservation (folder-mode JPEG overwrite/copy) ----------
+  // Extract the full APP1 "Exif" segment (marker + length + "Exif\0\0" + TIFF)
+  // from a JPEG buffer as a standalone ArrayBuffer, or null if absent.
+  function extractExifApp1(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xFFD8) return null;
+    let offset = 2;
+    const len = view.byteLength;
+    while (offset + 4 <= len) {
+      const marker = view.getUint16(offset);
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      const size = view.getUint16(offset + 2);
+      if (size < 2) break;
+      if (marker === 0xFFE1) {
+        const h = offset + 4;
+        if (h + 6 <= len &&
+            view.getUint32(h) === 0x45786966 /* "Exif" */ &&
+            view.getUint16(h + 4) === 0x0000) {
+          const end = offset + 2 + size;
+          if (end <= len) return buffer.slice(offset, end);
+          return null;
+        }
+      }
+      if (marker === 0xFFDA) break; // start of scan
+      offset += 2 + size;
+    }
+    return null;
+  }
+
+  // Given a standalone APP1 "Exif" segment buffer, set the IFD0 Orientation
+  // tag (0x0112) to 1 in place, if the tag is present. SHORT value, written
+  // in the segment's own endianness; the segment length is unchanged.
+  function setApp1OrientationToOne(app1Buffer) {
+    const view = new DataView(app1Buffer);
+    const len = view.byteLength;
+    const tiffStart = 10; // FFE1(2) + length(2) + "Exif\0\0"(6)
+    if (tiffStart + 8 > len) return;
+    const bo = view.getUint16(tiffStart);
+    let little;
+    if (bo === 0x4949) little = true;
+    else if (bo === 0x4D4D) little = false;
+    else return;
+    const u16 = (o) => view.getUint16(o, little);
+    const u32 = (o) => view.getUint32(o, little);
+    if (u16(tiffStart + 2) !== 0x002A) return;
+    const ifd0 = tiffStart + u32(tiffStart + 4);
+    if (ifd0 + 2 > len) return;
+    const n = u16(ifd0);
+    for (let i = 0; i < n; i++) {
+      const e = ifd0 + 2 + i * 12;
+      if (e + 12 > len) break;
+      if (u16(e) === 0x0112) {          // Orientation (SHORT, inline at e+8)
+        view.setUint16(e + 8, 1, little);
+        return;
+      }
+    }
+  }
+
+  // Build a new JPEG ArrayBuffer by inserting the original file's APP1 "Exif"
+  // segment into a freshly-encoded JPEG (as produced by canvas). The Orientation
+  // tag is forced to 1 because the pixels are already upright. The APP1 is placed
+  // right after SOI, or after an existing APP0 (JFIF) segment. If the original has
+  // no EXIF, the new JPEG is returned unchanged.
+  function reinsertExifApp1(newJpegBuffer, origBuffer) {
+    const app1 = extractExifApp1(origBuffer);
+    if (!app1) return newJpegBuffer;
+    setApp1OrientationToOne(app1);
+
+    const nv = new DataView(newJpegBuffer);
+    if (nv.byteLength < 2 || nv.getUint16(0) !== 0xFFD8) return newJpegBuffer;
+
+    // Insertion point: after SOI, and after a leading APP0 (JFIF) if present.
+    let insertAt = 2;
+    if (nv.byteLength >= 6 && nv.getUint16(2) === 0xFFE0) {
+      insertAt = 2 + 2 + nv.getUint16(4);
+      if (insertAt > nv.byteLength) insertAt = 2;
+    }
+
+    const head = new Uint8Array(newJpegBuffer.slice(0, insertAt));
+    const mid = new Uint8Array(app1);
+    const tail = new Uint8Array(newJpegBuffer.slice(insertAt));
+    const out = new Uint8Array(head.length + mid.length + tail.length);
+    out.set(head, 0);
+    out.set(mid, head.length);
+    out.set(tail, head.length + mid.length);
+    return out.buffer;
+  }
+
   // Parse an EXIF date string "YYYY:MM:DD HH:MM:SS" (also tolerate dashes
   // and a date-only form). Returns a Date or null.
   function parseExifDate(s) {
@@ -472,16 +657,140 @@
     return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
   }
 
-  function stampedName(name) {
+  function stampedJpegName(name) {
     const dot = name.lastIndexOf(".");
     const base = dot > 0 ? name.slice(0, dot) : name;
     return base + "_stamped.jpg";
   }
 
+  // ---------- Core stamping (pure, reusable, testable) ----------
+  // Stamps a File / Blob / ArrayBuffer and returns the output Blob plus
+  // metadata. Options:
+  //   name         - filename hint (used for PNG detection when input is a
+  //                  bare ArrayBuffer); taken from File/Blob when available.
+  //   type         - MIME hint, same idea as name.
+  //   lastModified - fallback timestamp (ms) when the image has no EXIF date.
+  //   outputFormat - "jpeg" (default) | "png" | "auto".
+  //                  "auto" keeps PNG sources as PNG, everything else JPEG.
+  //   preserveExif - when true and the output is JPEG and the source had an
+  //                  APP1 Exif segment, re-insert it (Orientation forced to 1).
+  async function stampImage(input, opts) {
+    opts = opts || {};
+    let buffer, name, type, lastModified;
+    if (input instanceof ArrayBuffer) {
+      buffer = input;
+      name = opts.name || "";
+      type = opts.type || "";
+      lastModified = opts.lastModified || 0;
+    } else if (input instanceof Blob) {
+      buffer = await input.arrayBuffer();
+      name = input.name || opts.name || "";
+      type = input.type || opts.type || "";
+      lastModified = (typeof input.lastModified === "number" ? input.lastModified : 0) ||
+                     opts.lastModified || 0;
+    } else {
+      throw new Error("stampImage: unsupported input");
+    }
+
+    const wasPng = /\.png$/i.test(name) || type === "image/png";
+    const exif = parseExif(buffer);
+
+    let dt = parseExifDate(exif.dateStr);
+    let fromFileDate = false;
+    if (!dt) {
+      dt = lastModified ? new Date(lastModified) : new Date();
+      fromFileDate = true;
+    }
+    const dateText = formatDate(dt);
+
+    // A Blob we can hand to createImageBitmap for decoding.
+    const decodeBlob = (input instanceof Blob)
+      ? input
+      : new Blob([buffer], { type: type || (wasPng ? "image/png" : "image/jpeg") });
+
+    // Decode. Prefer letting the browser apply EXIF orientation; most
+    // modern browsers (and the ones we target) do this automatically.
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(decodeBlob, { imageOrientation: "from-image" });
+    } catch (e) {
+      bitmap = await createImageBitmap(decodeBlob);
+    }
+
+    // Decide whether we still need to orient the pixels ourselves. We only
+    // do this when we can PROVE the browser left them un-oriented, by
+    // comparing the decoded size against the raw JPEG frame size.
+    const o = exif.orientation;
+    const raw = jpegRawSize(buffer);
+    let manualOrient = 1;
+    if (o !== 1 && raw) {
+      const swap = (o >= 5 && o <= 8);
+      const decodedMatchesRaw =
+        (bitmap.width === raw.w && bitmap.height === raw.h);
+      const decodedMatchesOriented =
+        (bitmap.width === raw.h && bitmap.height === raw.w);
+      if (swap && decodedMatchesRaw && !decodedMatchesOriented) {
+        manualOrient = o; // browser did NOT swap dimensions -> orient here
+      } else if (!swap && decodedMatchesRaw) {
+        manualOrient = o; // flip/180 cases: raw size matches, orient here
+      }
+      // If dimensions already match the oriented result, the browser
+      // handled it -> draw directly (manualOrient stays 1).
+    }
+
+    const src = { w: bitmap.width, h: bitmap.height };
+    const size = orientedSize(src.w, src.h, manualOrient);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.w;
+    canvas.height = size.h;
+    const ctx = canvas.getContext("2d");
+    applyOrientationTransform(ctx, manualOrient, src.w, src.h);
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close && bitmap.close();
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    drawStamp(canvas, dateText);
+
+    let outputFormat = opts.outputFormat || "jpeg";
+    if (outputFormat === "auto") outputFormat = wasPng ? "png" : "jpeg";
+
+    let blob;
+    if (outputFormat === "png") {
+      blob = await toBlob(canvas, "image/png");
+      if (!blob) throw new Error("encode failed");
+    } else {
+      blob = await toBlob(canvas, "image/jpeg", 0.95);
+      if (!blob) throw new Error("encode failed");
+      if (opts.preserveExif && !wasPng) {
+        const origApp1 = extractExifApp1(buffer);
+        if (origApp1) {
+          const merged = reinsertExifApp1(await blob.arrayBuffer(), buffer);
+          blob = new Blob([merged], { type: "image/jpeg" });
+        }
+      }
+    }
+
+    return {
+      blob: blob,
+      dateText: dateText,
+      width: width,
+      height: height,
+      fromFileDate: fromFileDate,
+      wasPng: wasPng,
+      orientation: o,
+      outputFormat: outputFormat,
+      exifDateStr: exif.dateStr,
+    };
+  }
+
+  // Thin wrapper used by the preview/download flow: always JPEG, builds a
+  // display name + object URL, and never throws (errors are captured).
   async function processFile(file) {
     const out = {
       name: file.name,
-      outName: stampedName(file.name),
+      outName: stampedJpegName(file.name),
       blob: null,
       url: null,
       dateText: null,
@@ -491,67 +800,14 @@
       height: 0,
       error: null,
     };
-
     try {
-      const buffer = await file.arrayBuffer();
-      const exif = parseExif(buffer);
-
-      let dt = parseExifDate(exif.dateStr);
-      if (!dt) {
-        dt = new Date(file.lastModified);
-        out.fromFileDate = true;
-      }
-      out.dateText = formatDate(dt);
-
-      // Decode. Prefer letting the browser apply EXIF orientation; most
-      // modern browsers (and the ones we target) do this automatically.
-      let bitmap;
-      try {
-        bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-      } catch (e) {
-        bitmap = await createImageBitmap(file);
-      }
-
-      // Decide whether we still need to orient the pixels ourselves. We only
-      // do this when we can PROVE the browser left them un-oriented, by
-      // comparing the decoded size against the raw JPEG frame size.
-      const o = exif.orientation;
-      const raw = jpegRawSize(buffer);
-      let manualOrient = 1;
-      if (o !== 1 && raw) {
-        const swap = (o >= 5 && o <= 8);
-        const decodedMatchesRaw =
-          (bitmap.width === raw.w && bitmap.height === raw.h);
-        const decodedMatchesOriented =
-          (bitmap.width === raw.h && bitmap.height === raw.w);
-        if (swap && decodedMatchesRaw && !decodedMatchesOriented) {
-          manualOrient = o; // browser did NOT swap dimensions -> orient here
-        } else if (!swap && decodedMatchesRaw) {
-          manualOrient = o; // flip/180 cases: raw size matches, orient here
-        }
-        // If dimensions already match the oriented result, the browser
-        // handled it -> draw directly (manualOrient stays 1).
-      }
-
-      const src = { w: bitmap.width, h: bitmap.height };
-      const size = orientedSize(src.w, src.h, manualOrient);
-      const canvas = document.createElement("canvas");
-      canvas.width = size.w;
-      canvas.height = size.h;
-      const ctx = canvas.getContext("2d");
-      applyOrientationTransform(ctx, manualOrient, src.w, src.h);
-      ctx.drawImage(bitmap, 0, 0);
-      bitmap.close && bitmap.close();
-
-      out.width = canvas.width;
-      out.height = canvas.height;
-
-      drawStamp(canvas, out.dateText);
-
-      const blob = await toBlob(canvas, "image/jpeg", 0.95);
-      if (!blob) throw new Error("encode failed");
-      out.blob = blob;
-      out.url = URL.createObjectURL(blob);
+      const r = await stampImage(file, { outputFormat: "jpeg" });
+      out.blob = r.blob;
+      out.url = URL.createObjectURL(r.blob);
+      out.dateText = r.dateText;
+      out.fromFileDate = r.fromFileDate;
+      out.width = r.width;
+      out.height = r.height;
     } catch (e) {
       out.error = e;
     }
@@ -660,21 +916,25 @@
       note.textContent = "אין תאריך צילום בתמונה — השתמשנו בתאריך הקובץ (לא בתאריך מהמצלמה).";
       meta.appendChild(note);
     }
-    if (res.wasPng) {
+    if (res.wasPng && !res.folderMode) {
       const note = document.createElement("div");
       note.className = "note info";
       note.textContent = "המקור היה PNG — הקובץ שיישמר יהיה JPEG.";
       meta.appendChild(note);
     }
 
-    const actions = document.createElement("div");
-    actions.className = "actions";
-    const btn = document.createElement("button");
-    btn.className = "btn primary";
-    btn.textContent = "💾 שמרו תמונה זו";
-    btn.addEventListener("click", () => saveOne(res));
-    actions.appendChild(btn);
-    meta.appendChild(actions);
+    // In folder mode the file was already written to disk; the download
+    // button would be confusing (and would convert a folder-mode PNG to JPEG).
+    if (!res.folderMode) {
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const btn = document.createElement("button");
+      btn.className = "btn primary";
+      btn.textContent = "💾 שמרו תמונה זו";
+      btn.addEventListener("click", () => saveOne(res));
+      actions.appendChild(btn);
+      meta.appendChild(actions);
+    }
 
     card.appendChild(imgbox);
     card.appendChild(meta);
@@ -718,9 +978,227 @@
     window.__done = true;
   }
 
+  // ---------- Folder mode ----------
+  const folderBtn = document.getElementById("folderBtn");
+  const folderInput = document.getElementById("folderInput");
+  const folderNote = document.getElementById("folderNote");
+  const folderModal = document.getElementById("folderModal");
+  const modalFolderName = document.getElementById("modalFolderName");
+  const recursiveChk = document.getElementById("recursiveChk");
+  const choiceCopy = document.getElementById("choiceCopy");
+  const choiceOverwrite = document.getElementById("choiceOverwrite");
+  const choiceCancel = document.getElementById("choiceCancel");
+
+  const hasDirPicker = (typeof window.showDirectoryPicker === "function");
+  const hasWebkitDir = ("webkitdirectory" in document.createElement("input"));
+
+  function isImageName(n) { return /\.(jpe?g|png)$/i.test(n || ""); }
+
+  // Without the File System Access API (phones / Safari / Firefox) we cannot
+  // overwrite originals; explain that and wire up a folder/multi file input.
+  if (!hasDirPicker) {
+    folderNote.classList.remove("hidden");
+    if (hasWebkitDir) {
+      folderInput.setAttribute("webkitdirectory", "");
+      folderInput.setAttribute("directory", "");
+    }
+  }
+
+  // Show the copy/overwrite choice. Resolves to {mode, recursive} or null.
+  function askFolderChoice(folderName) {
+    return new Promise((resolve) => {
+      modalFolderName.textContent = folderName || "";
+      recursiveChk.checked = false;
+      folderModal.classList.remove("hidden");
+
+      function cleanup(result) {
+        folderModal.classList.add("hidden");
+        choiceCopy.removeEventListener("click", onCopy);
+        choiceOverwrite.removeEventListener("click", onOverwrite);
+        choiceCancel.removeEventListener("click", onCancel);
+        folderModal.removeEventListener("click", onBackdrop);
+        resolve(result);
+      }
+      function onCopy() { cleanup({ mode: "copy", recursive: recursiveChk.checked }); }
+      function onOverwrite() {
+        // Extra, unmistakable confirmation for the destructive path.
+        const ok = window.confirm(
+          "להחליף לצמיתות את התמונות המקוריות בתיקייה? פעולה זו אינה ניתנת לביטול.");
+        if (ok) cleanup({ mode: "overwrite", recursive: recursiveChk.checked });
+      }
+      function onCancel() { cleanup(null); }
+      function onBackdrop(e) { if (e.target === folderModal) cleanup(null); }
+
+      choiceCopy.addEventListener("click", onCopy);
+      choiceOverwrite.addEventListener("click", onOverwrite);
+      choiceCancel.addEventListener("click", onCancel);
+      folderModal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  // Recursively gather image file handles. Skips a "stamped" subfolder so we
+  // never re-process our own output. relPath keeps the path under the root.
+  async function collectImageHandles(dirHandle, recursive, prefix) {
+    const out = [];
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === "file") {
+        if (isImageName(entry.name)) {
+          out.push({ handle: entry, name: entry.name, relPath: prefix + entry.name });
+        }
+      } else if (entry.kind === "directory" && recursive) {
+        if (entry.name === "stamped") continue;
+        const sub = await collectImageHandles(entry, recursive, prefix + entry.name + "/");
+        for (const s of sub) out.push(s);
+      }
+    }
+    return out;
+  }
+
+  // Resolve (creating intermediate dirs) a file handle for relPath under root.
+  async function getNestedFileHandle(root, relPath) {
+    const parts = relPath.split("/");
+    const fname = parts.pop();
+    let dir = root;
+    for (const p of parts) {
+      if (!p) continue;
+      dir = await dir.getDirectoryHandle(p, { create: true });
+    }
+    return dir.getFileHandle(fname, { create: true });
+  }
+
+  async function runFolder(dirHandle, mode, recursive) {
+    clearAll();
+    window.__done = false;
+    toolbar.classList.add("hidden"); // folder outputs are written straight to disk
+
+    setStatus('סורק את התיקייה… <span class="spinner"></span>');
+    let items;
+    try {
+      items = await collectImageHandles(dirHandle, recursive, "");
+    } catch (e) {
+      setStatus("לא הצלחנו לקרוא את התיקייה.");
+      return;
+    }
+    if (!items.length) {
+      setStatus("לא נמצאו תמונות בפורמט JPG או PNG בתיקייה.");
+      window.__done = true;
+      return;
+    }
+
+    let stampedDir = null;
+    if (mode === "copy") {
+      try {
+        stampedDir = await dirHandle.getDirectoryHandle("stamped", { create: true });
+      } catch (e) {
+        setStatus("לא הצלחנו ליצור את תיקיית היעד בשם stamped.");
+        return;
+      }
+    }
+
+    const N = items.length;
+    const previewLimit = 12;
+    let okCount = 0, overwritten = 0, copied = 0, failed = 0, rendered = 0;
+    const failNames = [];
+
+    for (let i = 0; i < N; i++) {
+      const it = items[i];
+      setStatus('מעבד ' + (i + 1) + ' מתוך ' + N + ' <span class="spinner"></span>');
+      try {
+        const file = await it.handle.getFile();
+        const r = await stampImage(file, { outputFormat: "auto", preserveExif: true });
+
+        let target;
+        if (mode === "overwrite") {
+          target = it.handle;
+        } else {
+          target = await getNestedFileHandle(stampedDir, it.relPath);
+        }
+        const writable = await target.createWritable();
+        await writable.write(r.blob);
+        await writable.close();
+
+        okCount++;
+        if (mode === "overwrite") overwritten++; else copied++;
+
+        const res = {
+          name: it.relPath,
+          outName: it.name,
+          blob: r.blob,
+          url: (rendered < previewLimit) ? URL.createObjectURL(r.blob) : null,
+          dateText: r.dateText,
+          fromFileDate: r.fromFileDate,
+          wasPng: r.wasPng,
+          width: r.width,
+          height: r.height,
+          outputFormat: r.outputFormat,
+          error: null,
+          folderMode: true,
+        };
+        results.push(res);
+        if (res.url) { renderCard(res); rendered++; }
+      } catch (e) {
+        failed++;
+        failNames.push(it.name);
+        results.push({
+          name: it.relPath, outName: it.name, blob: null, url: null,
+          error: e, folderMode: true,
+        });
+      }
+    }
+
+    let msg = "סיימנו! " + okCount + " מתוך " + N + " תמונות קיבלו חותמת תאריך";
+    if (mode === "overwrite") msg += ", והוחלפו במקום";
+    else msg += ", ונשמרו כעותקים בתיקייה stamped";
+    msg += ".";
+    if (failed) {
+      msg += " " + failed + " נכשלו";
+      if (failNames.length <= 5) msg += " (" + failNames.join(", ") + ")";
+      msg += ".";
+    }
+    if (rendered < okCount) {
+      msg += " מוצגות " + rendered + " תצוגות מקדימות ראשונות.";
+    }
+    setStatus(msg);
+    window.__done = true;
+  }
+
+  async function onFolderButton() {
+    if (hasDirPicker) {
+      let dirHandle;
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      } catch (e) {
+        return; // user cancelled the native picker
+      }
+      const choice = await askFolderChoice(dirHandle.name);
+      if (!choice) return;
+      await runFolder(dirHandle, choice.mode, choice.recursive);
+    } else {
+      // Fallback: open the folder/multi file input (originals can't be replaced).
+      folderInput.click();
+    }
+  }
+
+  folderBtn.addEventListener("click", onFolderButton);
+  folderInput.addEventListener("change", (e) => {
+    const files = Array.from(e.target.files)
+      .filter((f) => isImageName(f.name) || /^image\//.test(f.type || ""));
+    folderInput.value = "";
+    handleFiles(files);
+  });
+
   fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
   saveAllBtn.addEventListener("click", saveAll);
   clearAllBtn.addEventListener("click", clearAll);
+
+  // ---------- Test hooks (no real directory picker needed) ----------
+  window.__stampImage = stampImage;
+  window.__reinsertExifApp1 = reinsertExifApp1;
+  window.__extractExifApp1 = extractExifApp1;
+  window.__parseExif = parseExif;
+  // Drives the folder write path against any FileSystemDirectoryHandle (a real
+  // picked folder, or OPFS in tests) — no native directory picker required.
+  window.__runFolder = runFolder;
 
 })();
 </script>
