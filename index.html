@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>חותמת תאריך לתמונות</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-dark: #1d4ed8;
+    --ok: #16a34a;
+    --warn: #b45309;
+    --warn-bg: #fff7ed;
+    --err: #b91c1c;
+    --err-bg: #fef2f2;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  /* Isolate Latin acronyms so they don't reorder Hebrew punctuation. */
+  [dir="ltr"] { unicode-bidi: isolate; direction: ltr; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 16px 16px 48px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    margin: 8px 0 4px;
+  }
+  header p.lead {
+    margin: 0 0 4px;
+    color: var(--muted);
+    font-size: 0.98rem;
+  }
+  .privacy {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin: 14px 0;
+    font-size: 0.92rem;
+  }
+  .privacy span.ico { font-size: 1.1rem; line-height: 1.3; }
+
+  .picker {
+    display: block;
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 18px 16px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(37,99,235,.25);
+    transition: background .15s;
+  }
+  .picker:active { background: var(--accent-dark); }
+  input[type="file"] { display: none; }
+
+  .hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 8px 0 0;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin: 18px 0 6px;
+    flex-wrap: wrap;
+  }
+  .toolbar.hidden { display: none; }
+  .btn {
+    flex: 1 1 auto;
+    min-height: 50px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 10px 14px;
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn:active { opacity: .85; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  #status {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    color: var(--muted);
+    min-height: 1.3em;
+  }
+
+  .cards { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .card .imgbox {
+    background: #111317;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 160px;
+  }
+  .card .imgbox img {
+    max-width: 100%;
+    max-height: 60vh;
+    display: block;
+  }
+  .card .meta { padding: 12px 14px; }
+  .card .fname {
+    font-weight: 600;
+    word-break: break-all;
+    font-size: 0.95rem;
+  }
+  .card .date {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 2px;
+  }
+  .note {
+    margin-top: 8px;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  .note.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fed7aa; }
+  .note.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  .note.err { background: var(--err-bg); color: var(--err); border: 1px solid #fecaca; }
+  .card .actions { display: flex; gap: 10px; margin-top: 12px; }
+  .card .actions .btn { min-height: 46px; }
+
+  .spinner {
+    width: 18px; height: 18px;
+    border: 3px solid rgba(37,99,235,.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    display: inline-block;
+    vertical-align: -3px;
+    margin-left: 8px;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer {
+    margin-top: 32px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+  footer ul { margin: 6px 0; padding-inline-start: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>חותמת תאריך לתמונות</h1>
+    <p class="lead">מוסיף תאריך קטן ועדין בפינה של כל תמונה — לפי התאריך שבו היא צולמה.</p>
+  </header>
+
+  <div class="privacy">
+    <span>🔒 כל העיבוד קורה אצלך בטלפון. התמונות <b>לא נשלחות לשום מקום</b> ולא עולות לאינטרנט.</span>
+  </div>
+
+  <label class="picker" for="fileInput">📷 בחרו תמונות</label>
+  <input id="fileInput" type="file" accept="image/*" multiple>
+  <p class="hint">אפשר לבחור כמה תמונות יחד מגלריית התמונות.</p>
+
+  <div class="toolbar hidden" id="toolbar">
+    <button class="btn primary" id="saveAll">💾 שמרו הכל</button>
+    <button class="btn" id="clearAll">נקו</button>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <footer>
+    <div>כמה דברים טובים לדעת:</div>
+    <ul>
+      <li>התאריך נלקח מפרטי הצילום השמורים בתמונה. אם אין תאריך צילום — נשתמש בתאריך הקובץ ונסמן זאת.</li>
+      <li>הקובץ שנשמר הוא תמיד בפורמט&nbsp;<span dir="ltr">JPEG</span> ובאיכות גבוהה, גם כשהתמונה המקורית היא בפורמט&nbsp;<span dir="ltr">PNG</span>&rlm;.</li>
+      <li>בשמירה, פרטי הצילום המקוריים לא נשמרים בקובץ החדש — זה תקין.</li>
+      <li>באייפון, תמונות בפורמט&nbsp;<span dir="ltr">HEIC</span> בדרך כלל מומרות אוטומטית בבחירה. אם תמונה לא נפתחת, אפשר לשמור אותה מחדש בפורמט&nbsp;<span dir="ltr">JPEG</span>&rlm;.</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+"use strict";
+(function () {
+
+  // ---------- Minimal JPEG APP1 / EXIF parser ----------
+  // Reads DateTimeOriginal (0x9003), DateTimeDigitized (0x9004),
+  // DateTime (0x0132) and Orientation (0x0112) from the TIFF IFDs,
+  // including the Exif sub-IFD pointer (0x8769). Handles both
+  // little-endian (II) and big-endian (MM) TIFF byte order.
+  // Returns { dateStr, orientation } where dateStr is "YYYY:MM:DD HH:MM:SS"
+  // or null, and orientation is 1..8 (defaults to 1).
+  function parseExif(buffer) {
+    const result = { dateStr: null, orientation: 1 };
+    const view = new DataView(buffer);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xFFD8) {
+      return result; // not a JPEG -> no EXIF
+    }
+
+    let offset = 2;
+    let tiffStart = -1;
+    const len = view.byteLength;
+    while (offset + 4 <= len) {
+      const marker = view.getUint16(offset);
+      if ((marker & 0xFF00) !== 0xFF00) break; // not a valid marker
+      const size = view.getUint16(offset + 2);
+      if (size < 2) break;
+      if (marker === 0xFFE1) { // APP1
+        // Check for "Exif\0\0" header. Skip non-Exif APP1 (e.g. XMP)
+        // and keep scanning later segments.
+        const h = offset + 4;
+        if (h + 6 <= len &&
+            view.getUint32(h) === 0x45786966 /* "Exif" */ &&
+            view.getUint16(h + 4) === 0x0000) {
+          tiffStart = h + 6;
+          break;
+        }
+      }
+      if (marker === 0xFFDA) break; // start of scan -> no more metadata
+      offset += 2 + size;
+    }
+    if (tiffStart < 0 || tiffStart + 8 > len) return result;
+
+    // TIFF header: byte order.
+    const bo = view.getUint16(tiffStart);
+    let little;
+    if (bo === 0x4949) little = true;        // "II"
+    else if (bo === 0x4D4D) little = false;  // "MM"
+    else return result;
+
+    const u16 = (o) => view.getUint16(o, little);
+    const u32 = (o) => view.getUint32(o, little);
+
+    if (u16(tiffStart + 2) !== 0x002A) return result; // TIFF magic
+    const ifd0 = tiffStart + u32(tiffStart + 4);
+
+    // Read a single ASCII value of an entry (for datetime strings).
+    function readAscii(entryOffset) {
+      const count = u32(entryOffset + 4);
+      let valueOffset;
+      if (count <= 4) {
+        valueOffset = entryOffset + 8;        // stored inline
+      } else {
+        valueOffset = tiffStart + u32(entryOffset + 8);
+      }
+      let s = "";
+      for (let i = 0; i < count; i++) {
+        if (valueOffset + i >= len) break;
+        const c = view.getUint8(valueOffset + i);
+        if (c === 0) break;
+        s += String.fromCharCode(c);
+      }
+      return s.trim();
+    }
+
+    // Walk one IFD, calling back with (tag, entryOffset).
+    function eachEntry(ifdOffset, cb) {
+      if (ifdOffset + 2 > len) return;
+      const n = u16(ifdOffset);
+      for (let i = 0; i < n; i++) {
+        const e = ifdOffset + 2 + i * 12;
+        if (e + 12 > len) break;
+        cb(u16(e), e);
+      }
+    }
+
+    let exifIfd = -1;
+    const dates = {}; // tag -> string
+
+    eachEntry(ifd0, (tag, e) => {
+      if (tag === 0x0112) {                       // Orientation (SHORT)
+        const v = u16(e + 8);
+        if (v >= 1 && v <= 8) result.orientation = v;
+      } else if (tag === 0x8769) {                // Exif IFD pointer
+        exifIfd = tiffStart + u32(e + 8);
+      } else if (tag === 0x0132) {                // DateTime
+        dates[0x0132] = readAscii(e);
+      }
+    });
+
+    if (exifIfd > 0) {
+      eachEntry(exifIfd, (tag, e) => {
+        if (tag === 0x9003) dates[0x9003] = readAscii(e);      // DateTimeOriginal
+        else if (tag === 0x9004) dates[0x9004] = readAscii(e); // DateTimeDigitized
+      });
+    }
+
+    // Preference order: Original, Digitized, DateTime.
+    result.dateStr = dates[0x9003] || dates[0x9004] || dates[0x0132] || null;
+    return result;
+  }
+
+  // Read the raw (stored, un-oriented) pixel dimensions from a JPEG's SOF
+  // marker. Returns { w, h } or null. Used to detect whether the browser
+  // already applied EXIF orientation when decoding.
+  function jpegRawSize(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 4 || view.getUint16(0) !== 0xFFD8) return null;
+    let offset = 2;
+    const len = view.byteLength;
+    while (offset + 4 <= len) {
+      const marker = view.getUint16(offset);
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      // SOF0..SOF15 (except DHT 0xC4, JPG 0xC8, DAC 0xCC) carry frame size.
+      if (marker >= 0xFFC0 && marker <= 0xFFCF &&
+          marker !== 0xFFC4 && marker !== 0xFFC8 && marker !== 0xFFCC) {
+        const h = view.getUint16(offset + 5);
+        const w = view.getUint16(offset + 7);
+        return { w: w, h: h };
+      }
+      if (marker === 0xFFDA) break;
+      offset += 2 + view.getUint16(offset + 2);
+    }
+    return null;
+  }
+
+  // Parse an EXIF date string "YYYY:MM:DD HH:MM:SS" (also tolerate dashes
+  // and a date-only form). Returns a Date or null.
+  function parseExifDate(s) {
+    if (!s) return null;
+    s = s.replace(/\0/g, "").trim();
+    let m = s.match(/^(\d{4})[:\-](\d{2})[:\-](\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?/);
+    if (!m) return null;
+    const y = +m[1], mo = +m[2], d = +m[3];
+    const hh = +(m[4] || 0), mi = +(m[5] || 0), ss = +(m[6] || 0);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    const dt = new Date(y, mo - 1, d, hh, mi, ss);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  function formatDate(dt) {
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(dt.getFullYear());
+    return dd + "." + mm + "." + yyyy;
+  }
+
+  // ---------- Orientation handling ----------
+  // We decode the raw (unoriented) pixels with imageOrientation:'none'
+  // and apply the EXIF orientation ourselves, so behaviour is deterministic
+  // across browsers and the stamp always lands on the visual bottom-left.
+  function orientedSize(w, h, o) {
+    return (o >= 5 && o <= 8) ? { w: h, h: w } : { w: w, h: h };
+  }
+
+  function applyOrientationTransform(ctx, o, w, h) {
+    // w,h are the RAW (source) bitmap dimensions.
+    switch (o) {
+      case 2: ctx.transform(-1, 0, 0, 1, w, 0); break;       // flip horizontal
+      case 3: ctx.transform(-1, 0, 0, -1, w, h); break;      // rotate 180
+      case 4: ctx.transform(1, 0, 0, -1, 0, h); break;       // flip vertical
+      case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;        // transpose
+      case 6: ctx.transform(0, 1, -1, 0, h, 0); break;       // rotate 90 CW
+      case 7: ctx.transform(0, -1, -1, 0, h, w); break;      // transverse
+      case 8: ctx.transform(0, -1, 1, 0, 0, w); break;       // rotate 90 CCW
+      default: break;                                        // 1: identity
+    }
+  }
+
+  // ---------- Stamp drawing ----------
+  function perceivedLuminance(ctx, x, y, w, h, canvasW, canvasH) {
+    x = Math.max(0, Math.floor(x));
+    y = Math.max(0, Math.floor(y));
+    w = Math.min(canvasW - x, Math.ceil(w));
+    h = Math.min(canvasH - y, Math.ceil(h));
+    if (w <= 0 || h <= 0) return 128;
+    const data = ctx.getImageData(x, y, w, h).data;
+    let total = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      total += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    }
+    return n ? total / n : 128;
+  }
+
+  function drawStamp(canvas, text) {
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const shortSide = Math.min(W, H);
+
+    // Font size ~2.25% of the shorter side, minimum 12px. Margin ~2%.
+    const fontSize = Math.max(12, Math.round(shortSide * 0.0225));
+    const margin = Math.max(6, Math.round(shortSide * 0.02));
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // identity for drawing the stamp
+    ctx.font = fontSize + "px Arial, Helvetica, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    const m = ctx.measureText(text);
+    const textW = m.width;
+    const ascent = (m.actualBoundingBoxAscent || fontSize * 0.8);
+    const descent = (m.actualBoundingBoxDescent || fontSize * 0.2);
+    const textH = ascent + descent;
+
+    const x = margin;                         // left edge of text
+    const baseline = H - margin;              // alphabetic baseline
+    const topY = baseline - ascent;           // visual top of text
+
+    // Measure the region behind the text (+ padding) for auto-contrast.
+    const pad = Math.max(2, Math.floor(fontSize / 6));
+    const lum = perceivedLuminance(
+      ctx, x - pad, topY - pad, textW + 2 * pad, textH + 2 * pad, W, H
+    );
+
+    let textColor, haloColor;
+    if (lum < 128) {
+      textColor = "rgba(255,255,255,0.95)";   // dark bg -> white text
+      haloColor = "rgba(0,0,0,0.70)";         // soft dark halo
+    } else {
+      textColor = "rgba(0,0,0,0.92)";         // light bg -> black text
+      haloColor = "rgba(255,255,255,0.80)";   // soft light halo
+    }
+
+    // Soft opposite-colour halo (no solid box): a thin stroke plus a gentle
+    // blurred shadow, then the crisp text on top.
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(1.5, fontSize / 10);
+    ctx.strokeStyle = haloColor;
+    ctx.shadowColor = haloColor;
+    ctx.shadowBlur = Math.max(2, fontSize / 5);
+    ctx.strokeText(text, x, baseline);
+    // Second blurred pass deepens the halo for legibility on busy areas.
+    ctx.strokeText(text, x, baseline);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, x, baseline);
+  }
+
+  // ---------- Per-file processing ----------
+  function toBlob(canvas, type, quality) {
+    return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  }
+
+  function stampedName(name) {
+    const dot = name.lastIndexOf(".");
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    return base + "_stamped.jpg";
+  }
+
+  async function processFile(file) {
+    const out = {
+      name: file.name,
+      outName: stampedName(file.name),
+      blob: null,
+      url: null,
+      dateText: null,
+      fromFileDate: false,
+      wasPng: /\.png$/i.test(file.name) || file.type === "image/png",
+      width: 0,
+      height: 0,
+      error: null,
+    };
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const exif = parseExif(buffer);
+
+      let dt = parseExifDate(exif.dateStr);
+      if (!dt) {
+        dt = new Date(file.lastModified);
+        out.fromFileDate = true;
+      }
+      out.dateText = formatDate(dt);
+
+      // Decode. Prefer letting the browser apply EXIF orientation; most
+      // modern browsers (and the ones we target) do this automatically.
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (e) {
+        bitmap = await createImageBitmap(file);
+      }
+
+      // Decide whether we still need to orient the pixels ourselves. We only
+      // do this when we can PROVE the browser left them un-oriented, by
+      // comparing the decoded size against the raw JPEG frame size.
+      const o = exif.orientation;
+      const raw = jpegRawSize(buffer);
+      let manualOrient = 1;
+      if (o !== 1 && raw) {
+        const swap = (o >= 5 && o <= 8);
+        const decodedMatchesRaw =
+          (bitmap.width === raw.w && bitmap.height === raw.h);
+        const decodedMatchesOriented =
+          (bitmap.width === raw.h && bitmap.height === raw.w);
+        if (swap && decodedMatchesRaw && !decodedMatchesOriented) {
+          manualOrient = o; // browser did NOT swap dimensions -> orient here
+        } else if (!swap && decodedMatchesRaw) {
+          manualOrient = o; // flip/180 cases: raw size matches, orient here
+        }
+        // If dimensions already match the oriented result, the browser
+        // handled it -> draw directly (manualOrient stays 1).
+      }
+
+      const src = { w: bitmap.width, h: bitmap.height };
+      const size = orientedSize(src.w, src.h, manualOrient);
+      const canvas = document.createElement("canvas");
+      canvas.width = size.w;
+      canvas.height = size.h;
+      const ctx = canvas.getContext("2d");
+      applyOrientationTransform(ctx, manualOrient, src.w, src.h);
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close && bitmap.close();
+
+      out.width = canvas.width;
+      out.height = canvas.height;
+
+      drawStamp(canvas, out.dateText);
+
+      const blob = await toBlob(canvas, "image/jpeg", 0.95);
+      if (!blob) throw new Error("encode failed");
+      out.blob = blob;
+      out.url = URL.createObjectURL(blob);
+    } catch (e) {
+      out.error = e;
+    }
+    return out;
+  }
+
+  // ---------- UI ----------
+  const fileInput = document.getElementById("fileInput");
+  const cardsEl = document.getElementById("cards");
+  const statusEl = document.getElementById("status");
+  const toolbar = document.getElementById("toolbar");
+  const saveAllBtn = document.getElementById("saveAll");
+  const clearAllBtn = document.getElementById("clearAll");
+
+  let results = [];
+  // Exposed for automated tests (read the real stamped bytes / metadata).
+  window.__results = results;
+  window.__done = false;
+
+  function setStatus(html) { statusEl.innerHTML = html; }
+
+  function canShareFiles(files) {
+    return !!(navigator.canShare && navigator.share &&
+              navigator.canShare({ files }));
+  }
+
+  async function saveOne(res) {
+    if (!res.blob) return;
+    const file = new File([res.blob], res.outName, { type: "image/jpeg" });
+    if (canShareFiles([file])) {
+      try {
+        await navigator.share({ files: [file], title: res.outName });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // user cancelled
+        // otherwise fall through to download
+      }
+    }
+    const a = document.createElement("a");
+    a.href = res.url;
+    a.download = res.outName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function saveAll() {
+    const ready = results.filter((r) => r.blob);
+    if (!ready.length) return;
+    const files = ready.map((r) => new File([r.blob], r.outName, { type: "image/jpeg" }));
+    if (canShareFiles(files)) {
+      try {
+        await navigator.share({ files: files, title: "תמונות עם חותמת תאריך" });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+      }
+    }
+    // Fallback: download each one (small stagger helps some browsers).
+    for (let i = 0; i < ready.length; i++) {
+      await saveOne(ready[i]);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+
+  function renderCard(res) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    if (res.error) {
+      card.innerHTML =
+        '<div class="meta">' +
+        '<div class="fname"></div>' +
+        '<div class="note err">לא הצלחנו לקרוא את הקובץ הזה. אם זו תמונת <span dir="ltr">HEIC</span> מהאייפון, ' +
+        'נסו לייצא אותה כ־<span dir="ltr">JPEG</span> ולבחור שוב. המשכנו עם שאר התמונות.</div>' +
+        '</div>';
+      card.querySelector(".fname").textContent = res.name;
+      cardsEl.appendChild(card);
+      return;
+    }
+
+    const imgbox = document.createElement("div");
+    imgbox.className = "imgbox";
+    const img = document.createElement("img");
+    img.src = res.url;
+    img.alt = res.outName;
+    imgbox.appendChild(img);
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const fname = document.createElement("div");
+    fname.className = "fname";
+    fname.textContent = res.outName;
+
+    const date = document.createElement("div");
+    date.className = "date";
+    date.textContent = "תאריך על התמונה: " + res.dateText;
+
+    meta.appendChild(fname);
+    meta.appendChild(date);
+
+    if (res.fromFileDate) {
+      const note = document.createElement("div");
+      note.className = "note warn";
+      note.textContent = "אין תאריך צילום בתמונה — השתמשנו בתאריך הקובץ (לא בתאריך מהמצלמה).";
+      meta.appendChild(note);
+    }
+    if (res.wasPng) {
+      const note = document.createElement("div");
+      note.className = "note info";
+      note.textContent = "המקור היה PNG — הקובץ שיישמר יהיה JPEG.";
+      meta.appendChild(note);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const btn = document.createElement("button");
+    btn.className = "btn primary";
+    btn.textContent = "💾 שמרו תמונה זו";
+    btn.addEventListener("click", () => saveOne(res));
+    actions.appendChild(btn);
+    meta.appendChild(actions);
+
+    card.appendChild(imgbox);
+    card.appendChild(meta);
+    cardsEl.appendChild(card);
+  }
+
+  function clearAll() {
+    results.forEach((r) => r.url && URL.revokeObjectURL(r.url));
+    results.length = 0;
+    cardsEl.innerHTML = "";
+    toolbar.classList.add("hidden");
+    setStatus("");
+    fileInput.value = "";
+    window.__done = false;
+  }
+
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList);
+    if (!files.length) return;
+    clearAll();
+    window.__done = false;
+
+    toolbar.classList.remove("hidden");
+    saveAllBtn.disabled = true;
+
+    let errCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      setStatus('מעבד תמונה ' + (i + 1) + ' מתוך ' + files.length +
+                ' <span class="spinner"></span>');
+      const res = await processFile(files[i]);
+      results.push(res);
+      renderCard(res);
+      if (res.error) errCount++;
+    }
+
+    const okCount = results.length - errCount;
+    let msg = "מוכן! " + okCount + " תמונות עם חותמת תאריך.";
+    if (errCount) msg += " (" + errCount + " לא נקראו)";
+    setStatus(msg);
+    saveAllBtn.disabled = okCount === 0;
+    window.__done = true;
+  }
+
+  fileInput.addEventListener("change", (e) => handleFiles(e.target.files));
+  saveAllBtn.addEventListener("click", saveAll);
+  clearAllBtn.addEventListener("click", clearAll);
+
+})();
+</script>
+</body>
+</html>
