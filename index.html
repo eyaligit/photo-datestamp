@@ -417,8 +417,8 @@
     const W = canvas.width, H = canvas.height;
     const shortSide = Math.min(W, H);
 
-    // Font size ~2.25% of the shorter side, minimum 12px. Margin ~2%.
-    const fontSize = Math.max(12, Math.round(shortSide * 0.0225));
+    // Font size ~5.6% of the shorter side (2.5x original), minimum 30px. Margin ~2%.
+    const fontSize = Math.max(30, Math.round(shortSide * 0.05625));
     const margin = Math.max(6, Math.round(shortSide * 0.02));
 
     ctx.setTransform(1, 0, 0, 1, 0, 0); // identity for drawing the stamp
